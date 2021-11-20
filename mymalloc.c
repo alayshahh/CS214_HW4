@@ -29,10 +29,10 @@ void myinit(int allocArg) {
     *point = BEGINNING_FREE_SPACE;
         
     unsigned long* next = (unsigned long *) (point + 1);
-    *next = 0;
+    *next = 69;
 
     unsigned long* prev = (unsigned long *) (next + 1);
-    *prev = 0;
+    *prev = 420;
     
     unsigned long *point_2 = ((unsigned long *)heap) + 131071;  // (1MB - 8 bytes)/ 8 bytes
     *point_2 = BEGINNING_FREE_SPACE;
@@ -54,23 +54,41 @@ void* mymalloc(size_t size) {
     size = findNearestMultipleof8(size);
 
     if (allocAlg == FIRST_FIT) {
-        unsigned long *ptr = (unsigned long *)firstFree;
+        
+        //iterate to find the first fit
+        unsigned long* ptr = (unsigned long *)firstFree;
         while (ptr != 0 && *(ptr) <= size) {
             ptr = (unsigned long *) *(ptr + 1);
         }
         if(ptr == 0) return NULL; //reached end of list, not enough space
-        
+
+        //save old data
+        size_t oldSize = *ptr;
+        unsigned long next = *(ptr + 1);
+        unsigned long prev = *(ptr + 2);
+
+        printf("oldSize: %lu\n", oldSize);
+
         //there is enough space, but split
-        printf("new block added at %p\n", ptr);
         *ptr = size;
         *ptr |= 1 << 0; //set allocated bit
-        printf("%lu\n", *ptr & 1);
-        printf("size is : %zu\n", *ptr & -2);
-        char *secondSize = ((char*)ptr + size) - 1;
-        printf("new block ended at %p\n", secondSize);
+        
+        //set second size
+        char* secondSize = ((char*)ptr + size) - 1;
         *secondSize = size;
-        printf("total bytes allocated %ld\n", secondSize - (char*) ptr);
 
+        //set split block
+        unsigned long* block = (unsigned long*) (secondSize + 1);
+        *block = oldSize - size;
+        *(block + 1) = (unsigned long) next;
+        *(block + 2) = (unsigned long) prev;
+        unsigned long* endSize = (unsigned long*) ((char*) ptr + oldSize - 1);
+        *endSize = oldSize - size;
+
+        printf("size rem: %lu\n", *block);
+        printf("next: %lu\n", *(block + 1));
+        printf("prev: %lu\n", *(block + 2));
+        printf("endSize: %lu\n", *endSize);
         return ptr;
     }
 
