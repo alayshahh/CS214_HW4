@@ -29,16 +29,21 @@ void myinit(int allocArg) {
     unsigned long* point = (unsigned long*)heap;
     *point = BEGINNING_FREE_SPACE;
     *point |= 0 << 0;  //set unallocated bit
+    printf("Point1=%p\n", (void*)point);
+    printf("value at point  = %zu\n", *point);
 
     unsigned long* next = (unsigned long*)(point + 1);
     *next = 0;
 
     unsigned long* prev = (unsigned long*)(next + 1);
     *prev = 0;
-
+    printf("next =%p\n", (void*)next);
+    printf("prev =%p\n", (void*)prev);
     unsigned long* point_2 = ((unsigned long*)heap) + 131071;  // (1MB - 8 bytes)/ 8 bytes
     *point_2 = BEGINNING_FREE_SPACE;
     *point_2 |= 0 << 0;  //set unallocated bit
+    printf("Point2=%p\n", (void*)point_2);
+    printf("diff bw pointers: %ld \n", ((char*)point_2) - ((char*)point));
 
     allocAlg = allocArg;
     firstFree = heap;
@@ -49,7 +54,8 @@ void mycleanup() {
 }
 
 size_t findNearestMultipleof8(size_t size) {
-    size += (8 - (size % 8));
+    if (size % 8 != 0)
+        size += (8 - (size % 8));
     // we want the malloced block to be atleast 32 bytes so when we free, it will be big enough to store all meta data
     return size > 32 ? size : 32;
 }
@@ -57,6 +63,7 @@ size_t findNearestMultipleof8(size_t size) {
 void* mymalloc(size_t size) {
     size = size + 16;  // [size , payload, size]
     size = findNearestMultipleof8(size);
+    printf("Size = %lu\n", size);
 
     if (allocAlg == FIRST_FIT) {
         //iterate to find the first fit
@@ -64,7 +71,7 @@ void* mymalloc(size_t size) {
         while (ptr != 0 && *(ptr) < size) {
             ptr = (unsigned long*)*(ptr + 1);
         }
-        if (ptr == 0) return NULL;  //reached end of list, not enough space
+        if (ptr == 0 || *ptr < size) return NULL;  //reached end of list, not enough space
 
         printf("%p\n", ptr);
         //save old data
@@ -78,7 +85,7 @@ void* mymalloc(size_t size) {
         printf("*ptr (%lu) - size (%lu) = %lu bytes \n", *ptr, size, (*ptr - size));
         if (((*ptr) - size) < 32) {  // dont split
             printf("dont split");
-            unsigned long* endSize = (ptr + (*ptr / 8)) - 1;
+            unsigned long* endSize = (ptr + (size / 8)) - 1;
             *endSize |= 1 << 0;  // set allocated bit at end
             *ptr |= 1 << 0;      //set allocated bit in front
             if (next != 0) {
@@ -117,6 +124,10 @@ void* mymalloc(size_t size) {
             unsigned long* endSize = (ptr + (oldSize / 8) - 1);
             *endSize = oldSize - size;
             *endSize |= 0 << 0;  //set unallocated bit
+            printf("malloc block starts: %p \n", (void*)ptr);
+            printf("value at ptr (%p) : %lu \n", (void*)ptr, *ptr);
+            printf("ends at %p \n", (void*)secondSize);
+            printf("value at endSize (%p) : %lu\n", (void*)secondSize, *secondSize);
             printf("starts at: %p\n", block);
             printf("size rem: %lu\n", *block);
             printf("next: %lu\n", *(block + 1));
@@ -134,7 +145,7 @@ void* mymalloc(size_t size) {
 int main() {
     myinit(0);
     printf(" starting at : %p\n", heap);
-    void* ptr = mymalloc(1048529);
+    void* ptr = mymalloc(1048552);
     if (ptr == NULL) {
         printf("fuck\n");
     } else {
