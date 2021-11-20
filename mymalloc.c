@@ -85,7 +85,8 @@ void* mymalloc(size_t size) {
         printf("*ptr (%lu) - size (%lu) = %lu bytes \n", *ptr, size, (*ptr - size));
         if (((*ptr) - size) < 32) {  // dont split
             printf("dont split");
-            unsigned long* endSize = (ptr + (size / 8)) - 1;
+            unsigned long* endSize = (ptr + (*ptr / 8)) - 1;
+
             *endSize |= 1 << 0;  // set allocated bit at end
             *ptr |= 1 << 0;      //set allocated bit in front
             if (next != 0) {
