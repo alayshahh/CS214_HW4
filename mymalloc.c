@@ -66,10 +66,10 @@ void* mymalloc(size_t size) {
         *ptr |= 1 << 0; //set allocated bit
         printf("%lu\n", *ptr & 1);
         printf("size is : %zu\n", *ptr & -2);
-        unsigned long *secondSize = (ptr + *ptr) - 1;
+        char *secondSize = ((char*)ptr + size) - 1;
         printf("new block ended at %p\n", secondSize);
         *secondSize = size;
-        printf("total bytes allocated %ld\n", secondSize - ptr);
+        printf("total bytes allocated %ld\n", secondSize - (char*) ptr);
 
         return ptr;
     }
