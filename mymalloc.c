@@ -4,9 +4,10 @@
 #include "constants.h"
 
 void* heap;
-void* firstFree;  //contains address of the first free block
-void* nextBlock;  //for next fit algo
+void* firstBlock;  //contains address of the first free block
+void* nextBlock;   //for next fit algo
 size_t askedSize = 0;
+int allocAlg = -1;
 
 /*
 design of free block            design of malloced block
@@ -23,9 +24,15 @@ design of free block            design of malloced block
     header & footer size in free = 32 bytes
     header & footer size in used block = 16 bytes
 */
-int allocAlg = -1;
 
 void myinit(int allocArg) {
+    /*
+    initialize the memory allacator:
+        malloc 1 MB of memory
+        set the alloc Arg
+        set the malloc block meta data so we can begin to use it 
+        set nextBlock & firstBlock
+    */
     heap = malloc(1 << 20);
     unsigned long* point = (unsigned long*)heap;
     *point = BEGINNING_FREE_SPACE;
@@ -47,14 +54,26 @@ void myinit(int allocArg) {
     // printf("diff bw pointers: %ld \n", ((char*)point_2) - ((char*)point));
 
     allocAlg = allocArg;
-    firstFree = heap;
+    firstBlock = heap;
     nextBlock = heap;
 }
 
 void mycleanup() {
+    /*
+    reset all stats and free heap
+    */
+    firstBlock = NULL;
+    nextBlock = NULL;
+    askedSize = 0;
+    allocAlg = -1;
     free(heap);
 }
 void* setMallocBlock(unsigned long* ptr, size_t size) {
+    /*
+        passed in a pointer to the beginnign fo free block we want to set up for use
+        it will set the next and prev block metadata & split the current free block if needed (& set metadata of split block)
+    */
+
     // printf("%p\n", ptr);
     //save old data
     size_t oldSize = *ptr & -2;
@@ -78,15 +97,17 @@ void* setMallocBlock(unsigned long* ptr, size_t size) {
         if (prev != 0) {
             *((unsigned long*)prev + 1) = next;
         } else
-            firstFree = (void*)next;
+            firstBlock = (void*)next;
         //set head of freeBlock
         printf("malloced starts at: %p\n", ptr);
+        printf("payload at %p\n", ptr + 1);
         printf("size of malloc: %lu\n", *ptr);
         printf("next: %lu\n", *(ptr + 1));
         printf("prev: %lu\n", *(ptr + 2));
         printf("endSize: %lu\n", *endSize);
         printf("ends at: %p\n", endSize);
-        return ptr;
+
+        return (void*)(ptr + 1);
     }
     *ptr = size;
     *ptr |= 1 << 0;  //set allocated bit
@@ -103,22 +124,27 @@ void* setMallocBlock(unsigned long* ptr, size_t size) {
     *(block + 1) = next;
     *(block + 2) = prev;
     if (prev == 0) {
-        firstFree = (void*)block;
+        firstBlock = (void*)block;
     }
     nextBlock = (void*)block;
     unsigned long* endSize = (ptr + (oldSize / 8) - 1);
     *endSize = oldSize - size;
     *endSize |= 0 << 0;  //set unallocated bit
     printf("malloc starts at (%p) -> size: %lu \n", (void*)ptr, *ptr);
+    printf("payload at %p\n", ptr + 1);
     printf("end of malloc block at (%p) -> size: %lu\n", (void*)secondSize, *secondSize);
     printf("split block starts at %p -> value %lu \n", block, *block);
     printf("split block ends at (%p) -> value %lu\n", endSize, *endSize);
     printf("next free from split: %lu\n", *(block + 1));
     printf("prev free from split: %lu\n", *(block + 2));
 
-    return (void*)ptr;
+    return (void*)(ptr + 1);
 }
 void* findFit(void* start, size_t size) {
+    /*
+    finds the next fit beginning from the start pointer 
+
+    */
     if (start == NULL) {
         return NULL;
     }
@@ -129,9 +155,11 @@ void* findFit(void* start, size_t size) {
     if (ptr == 0 || *ptr < size) return NULL;
     return setMallocBlock(ptr, size);  //reached end of list, not enough space
 }
-
 void* findBestFit(size_t size) {
-    unsigned long* ptr = firstFree;
+    /*
+    finds the smallest possible block that fits the size needed
+    */
+    unsigned long* ptr = firstBlock;
     unsigned long* bestFit = NULL;
     while (ptr != 0) {
         if (*ptr >= size) {
@@ -151,8 +179,11 @@ size_t findNearestMultipleof8(size_t size) {
     // we want the malloced block to be atleast 32 bytes so when we free, it will be big enough to store all meta data
     return size > 32 ? size : 32;
 }
-
 void* mymalloc(size_t size) {
+    /*
+    takes in N number of bytes and tries to find space in the heap to fit the data along w meta data needed
+    returns null if not enough space.
+    */
     if (size == 0) {
         return NULL;
     }
@@ -162,13 +193,13 @@ void* mymalloc(size_t size) {
     // printf("Size = %lu\n", size);
     void* ptr = NULL;
     if (allocAlg == FIRST_FIT) {
-        ptr = findFit(firstFree, size);
+        ptr = findFit(firstBlock, size);
     } else if (allocAlg == NEXT_FIT) {
         // printf("next fit");
         // if (nextBlock == NULL) printf("NEXTBLOCK = NULL\n");
         ptr = findFit(nextBlock, size);  //start from next free block from allocated block
         if (ptr == NULL) {               //if we dont find anything, try from the beginning
-            ptr = findFit(firstFree, size);
+            ptr = findFit(firstBlock, size);
         }
     } else if (allocAlg == BEST_FIT) {  //best fit
         ptr = findBestFit(size);
@@ -179,16 +210,51 @@ void* mymalloc(size_t size) {
     return ptr;
 }
 
+void myfree(void* ptr) {
+    if (ptr == NULL) {
+        return;
+    }
+    char* heapStart = (char*)heap;
+    char* heapEnd = heapStart + (1024 * 1024);
+
+    if (((char*)ptr) > heapEnd || ((char*)ptr) < heapStart) {
+        printf("error: not a heap pointer");
+    }
+    unsigned long* head = ((unsigned long*)ptr) - 1;  // if ptr is in heap, then to find it we will need to search using head
+
+    unsigned long* find = heap;
+    unsigned long* prevFree = NULL;
+    while (find < head) {
+        if (!(*find & 0x1)) {  // free block
+            prevFree = find;
+        }
+        find = find + ((*find) / 8);  // add the size at find to move to the next block
+    }
+    if (find != head) {
+        printf("error: not a malloced address\n");
+        return;
+    }
+    if (!(*find & 0x1)) {  // bit is set at unallocated
+        printf("error: double free\n");
+        return;
+    }
+    if (prevFree == NULL) {
+        printf("new first free block\n");
+    }
+    printf("find = %p, head = %p, ptr = %p\n", find, head, ptr);
+}
+
 int main() {
     myinit(2);
     printf(" starting at : %p\n", heap);
     void* ptr = mymalloc(1048);
     printf(" pointer : %p\n", ptr);
-    printf("firstFree = %p\n", firstFree);
+    printf("firstBlock = %p\n", firstBlock);
 
     void* ptr2 = mymalloc(5);
     printf(" pointer 2 : %p\n", ptr2);
-    printf("firstFree = %p\n", firstFree);
+    printf("firstBlock = %p\n", firstBlock);
+    myfree(ptr2);
     if (ptr == NULL || ptr2 == NULL) {
         printf("fuck\n");
     } else {
