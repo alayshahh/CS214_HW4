@@ -238,11 +238,71 @@ void myfree(void* ptr) {
         printf("error: double free\n");
         return;
     }
+
+    //you can free so start by setting unallocated bits
+    *head |= 0 << 0;
+    unsigned long headSize = *head;
+    unsigned long* endSizePtr = (head + (headSize / 8)) - 1;
+    *endSizePtr |= 0 << 0;
+
+    //prev free does not exist
     if (prevFree == NULL) {
         printf("new first free block\n");
+        freeHeadandMakeItFirstFree(head);
+    } else { // prev free exists
+        //mark prevfree's next block as head
+        unsigned long oldNext = *(prevFree + 1);
+        *(prevFree + 1) = (unsigned long) head;
+
+        //make head's prev equal to prevFree, head's next equal to prevFree's next
+        *(head + 1) = oldNext;
+        *(head + 2) = (unsigned long) prevFree;
+
+        //check if you should coalesce (prevFree is continguous)
+        unsigned long* endOfPrevFree = prevFree + (*prevFree / 8);
+        if(endOfPrevFree == head){
+            coalesce(prevFree, head);
+            //now, make head prevFree
+            head = prevFree;
+        }
     }
+
+    //check if endOfHeadPtr is a free block (contiguous)
+    unsigned long* endOfHeadPtr = head + (*head / 8);
+    if(!(*endOfHeadPtr & 1)){ //endOfHeadPtr is a free block
+        coalesce(head, endOfHeadPtr);
+    }
+
     printf("find = %p, head = %p, ptr = %p\n", find, head, ptr);
 }
+
+void coalesce(unsigned long* head, unsigned long* tail){
+    //store old data
+    unsigned long tailSize = *tail;
+    unsigned long* tailNext = *(tail + 1);
+
+    //add tailSize to head's size
+    *(head) += tailSize;
+
+    //make tail's endSize the size of the coalesced block
+    unsigned long* tailEndSizePtr = tail + (tailSize / 8) - 1;
+    tailEndSizePtr = *head;
+
+    //make head's next = tail's next
+    *(head + 1) = *(tail + 1);
+}
+
+void freeHeadandMakeItFirstFree(unsigned long* head){
+    //set head's next to be firstBlock, prev to be 0
+    unsigned long* nextPtr = head + 1;
+    *nextPtr = firstBlock;
+    unsigned long* prevPtr = head + 2;
+    *prevPtr = 0;
+
+    //make firstBlock head
+    firstBlock = head;
+}
+
 
 int main() {
     myinit(2);
