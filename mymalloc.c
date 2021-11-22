@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "constants.h"
 
@@ -37,7 +38,7 @@ void myinit(int allocArg) {
     unsigned long* point = (unsigned long*)heap;
     *point = BEGINNING_FREE_SPACE;
     *point |= 0 << 0;  //set unallocated bit
-    // printf("Point1=%p\n", (void*)point);
+    printf("begin=%p\n", (void*)point);
     // printf("value at point  = %zu\n", *point);
 
     unsigned long* next = (unsigned long*)(point + 1);
@@ -50,7 +51,7 @@ void myinit(int allocArg) {
     unsigned long* point_2 = ((unsigned long*)heap) + 131071;  // (1MB - 8 bytes)/ 8 bytes
     *point_2 = BEGINNING_FREE_SPACE;
     *point_2 |= 0 << 0;  //set unallocated bit
-    // printf("Point2=%p\n", (void*)point_2);
+    printf("endheap=%p\n", (void*)point_2);
     // printf("diff bw pointers: %ld \n", ((char*)point_2) - ((char*)point));
 
     allocAlg = allocArg;
@@ -83,8 +84,8 @@ void* setMallocBlock(unsigned long* ptr, size_t size) {
 
     //there is enough space
     //do we split?
-    // printf("pointer at: %p, value at pointer %lu \n", ptr, *ptr);
-    // printf("*ptr (%lu) - size (%lu) = %lu bytes \n", *ptr, size, (*ptr - size));
+    printf("pointer at: %p, value at pointer %lu \n", ptr, *ptr);
+    printf("*ptr (%lu) - size (%lu) = %lu bytes \n", *ptr, size, (*ptr - size));
     if (((*ptr) - size) < 32) {  // dont split
         // printf("dont split");
         unsigned long* endSize = (ptr + (*ptr / 8)) - 1;
@@ -100,13 +101,13 @@ void* setMallocBlock(unsigned long* ptr, size_t size) {
         } else
             firstBlock = (void*)next;
         // set head of freeBlock
-        // printf("malloced starts at: %p\n", ptr);
-        // printf("payload at %p\n", ptr + 1);
-        // printf("size of malloc: %lu\n", *ptr);
-        // printf("next: %lu\n", *(ptr + 1));
-        // printf("prev: %lu\n", *(ptr + 2));
-        // printf("endSize: %lu\n", *endSize);
-        // printf("ends at: %p\n", endSize);
+        printf("malloced starts at: %p\n", ptr);
+        printf("payload at %p\n", ptr + 1);
+        printf("size of malloc: %lu\n", *ptr);
+        printf("next: %lu\n", *(ptr + 1));
+        printf("prev: %lu\n", *(ptr + 2));
+        printf("endSize: %lu\n", *endSize);
+        printf("ends at: %p\n", endSize);
 
         return (void*)(ptr + 1);
     }
@@ -131,13 +132,13 @@ void* setMallocBlock(unsigned long* ptr, size_t size) {
     unsigned long* endSize = (ptr + (oldSize / 8) - 1);
     *endSize = oldSize - size;
     *endSize |= 0 << 0;  //set unallocated bit
-    // printf("malloc starts at (%p) -> size: %lu \n", (void*)ptr, *ptr);
-    // printf("payload at %p\n", ptr + 1);
-    // printf("end of malloc block at (%p) -> size: %lu\n", (void*)secondSize, *secondSize);
-    // printf("split block starts at %p -> value %lu \n", block, *block);
-    // printf("split block ends at (%p) -> value %lu\n", endSize, *endSize);
-    // printf("next free from split: %lu\n", *(block + 1));
-    // printf("prev free from split: %lu\n", *(block + 2));
+    printf("malloc starts at (%p) -> size: %lu \n", (void*)ptr, *ptr);
+    printf("payload at %p\n", ptr + 1);
+    printf("end of malloc block at (%p) -> size: %lu\n", (void*)secondSize, *secondSize);
+    printf("split block starts at %p -> value %lu \n", block, *block);
+    printf("split block ends at (%p) -> value %lu\n", endSize, *endSize);
+    printf("next free from split: %p\n", (unsigned long*)*(block + 1));
+    printf("prev free from split: %p\n", (unsigned long*)*(block + 2));
 
     return (void*)(ptr + 1);
 }
@@ -165,6 +166,7 @@ void* findBestFit(size_t size) {
     unsigned long* ptr = firstBlock;
     unsigned long* bestFit = NULL;
     while (ptr != 0) {
+        printf(" finding best fit, checking %p...\n", ptr);
         if (*ptr >= size) {
             if (bestFit == NULL) {
                 bestFit = ptr;
@@ -173,6 +175,7 @@ void* findBestFit(size_t size) {
             }
         }
         ptr = (unsigned long*)*(ptr + 1);
+        sleep(1);
     }
     return setMallocBlock(bestFit, size);
 }
@@ -228,6 +231,9 @@ void coalesce(unsigned long* head, unsigned long* tail) {
 
     //make head's next = tail's next
     *(head + 1) = *(tail + 1);
+    printf("head next %p\n", (unsigned long*)*(head + 1));
+
+    printf("tail next %p\n", (unsigned long*)*(tail + 1));
 }
 
 void freeHeadandMakeItFirstFree(unsigned long* head) {
@@ -236,7 +242,7 @@ void freeHeadandMakeItFirstFree(unsigned long* head) {
     *nextPtr = (unsigned long)firstBlock;
     unsigned long* prevPtr = head + 2;
     *prevPtr = 0;
-    unsigned long* nextPrev = ((unsigned long*)firstBlock) + 1;  //set prev of next to head
+    unsigned long* nextPrev = ((unsigned long*)firstBlock) + 2;  //set prev of next to head
     *nextPrev = (unsigned long)head;
     //make firstBlock head
     firstBlock = head;
@@ -276,12 +282,15 @@ void myfree(void* ptr) {
     }
 
     //you can free so start by setting unallocated bits
+
     *head &= ~(1 << 0);
+    printf("freeing head @ %p -> %lu\n", head, *head);
     // printf("head (should have unalloc bit now) (%p) -> %lu \n", head, *head);
     unsigned long headSize = *head;
     unsigned long* endSizePtr = (head + (headSize / 8)) - 1;
-    *endSizePtr &= ~(1 << 0);
 
+    *endSizePtr &= ~(1 << 0);
+    printf("end of free block @ %p -> %lu\n", endSizePtr, *endSizePtr);
     //prev free does not exist
     if (prevFree == NULL) {
         // printf("new first free block\n");
@@ -306,6 +315,7 @@ void myfree(void* ptr) {
 
     //check if endOfHeadPtr is a free block (contiguous)
     unsigned long* endOfHeadPtr = head + (*head / 8);
+    printf("end of head of free block after coalese I: %p\n", endOfHeadPtr);
     if (!(*endOfHeadPtr & 1)) {  //endOfHeadPtr is a free block
         coalesce(head, endOfHeadPtr);
     }
@@ -314,24 +324,28 @@ void myfree(void* ptr) {
 }
 
 int main() {
-    myinit(0);
-    printf(" starting at : %p\n", heap);
+    myinit(1);
     void* ptr = mymalloc(1048);
-    printf(" pointer : %p\n", ptr);
-    printf("firstBlock = %p\n", firstBlock);
+    printf("pointer malloc 1048 bytes : %p\n", ptr);
+    printf("first block: (%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
 
     unsigned long* ptr2 = (unsigned long*)mymalloc(5);
     printf("pointer 2 : %p\n", ptr2);
-    printf("firstBlock = %p\n", firstBlock);
+    printf("first block: (%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
     myfree(ptr2);
-    printf("(%p) - > %lu\n", firstBlock, *((unsigned long*)firstBlock));
+    printf("frist block(%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
     unsigned long* ptr3 = (unsigned long*)mymalloc(5);
-    printf("ptr 3 :%p -> %lu \n", ptr3, *ptr3);
+    printf("ptr 3 :%p -> %lu \n", ptr3, *(ptr3 - 1));
     myfree(ptr);
-    printf("(%p) - > %lu\n", firstBlock, *((unsigned long*)firstBlock));
+    printf("first block(%p) - > %lu firstBlock next: %lu \n", firstBlock, *((unsigned long*)firstBlock), *(((unsigned long*)firstBlock) + 1));
+    unsigned long* ptr4 = (unsigned long*)mymalloc(1040);
+    if (ptr4 == ptr) {
+        printf("fuck yes baby\n");
+    }
     if (ptr == NULL || ptr2 == NULL) {
         printf("fuck\n");
     } else {
         printf("making progress\n");
     }
+    free(heap);
 }
