@@ -68,6 +68,7 @@ void mycleanup() {
     allocAlg = -1;
     free(heap);
 }
+
 void* setMallocBlock(unsigned long* ptr, size_t size) {
     /*
         passed in a pointer to the beginnign fo free block we want to set up for use
@@ -82,8 +83,8 @@ void* setMallocBlock(unsigned long* ptr, size_t size) {
 
     //there is enough space
     //do we split?
-    printf("pointer at: %p, value at pointer %lu \n", ptr, *ptr);
-    printf("*ptr (%lu) - size (%lu) = %lu bytes \n", *ptr, size, (*ptr - size));
+    // printf("pointer at: %p, value at pointer %lu \n", ptr, *ptr);
+    // printf("*ptr (%lu) - size (%lu) = %lu bytes \n", *ptr, size, (*ptr - size));
     if (((*ptr) - size) < 32) {  // dont split
         // printf("dont split");
         unsigned long* endSize = (ptr + (*ptr / 8)) - 1;
@@ -98,14 +99,14 @@ void* setMallocBlock(unsigned long* ptr, size_t size) {
             *((unsigned long*)prev + 1) = next;
         } else
             firstBlock = (void*)next;
-        //set head of freeBlock
-        printf("malloced starts at: %p\n", ptr);
-        printf("payload at %p\n", ptr + 1);
-        printf("size of malloc: %lu\n", *ptr);
-        printf("next: %lu\n", *(ptr + 1));
-        printf("prev: %lu\n", *(ptr + 2));
-        printf("endSize: %lu\n", *endSize);
-        printf("ends at: %p\n", endSize);
+        // set head of freeBlock
+        // printf("malloced starts at: %p\n", ptr);
+        // printf("payload at %p\n", ptr + 1);
+        // printf("size of malloc: %lu\n", *ptr);
+        // printf("next: %lu\n", *(ptr + 1));
+        // printf("prev: %lu\n", *(ptr + 2));
+        // printf("endSize: %lu\n", *endSize);
+        // printf("ends at: %p\n", endSize);
 
         return (void*)(ptr + 1);
     }
@@ -130,16 +131,17 @@ void* setMallocBlock(unsigned long* ptr, size_t size) {
     unsigned long* endSize = (ptr + (oldSize / 8) - 1);
     *endSize = oldSize - size;
     *endSize |= 0 << 0;  //set unallocated bit
-    printf("malloc starts at (%p) -> size: %lu \n", (void*)ptr, *ptr);
-    printf("payload at %p\n", ptr + 1);
-    printf("end of malloc block at (%p) -> size: %lu\n", (void*)secondSize, *secondSize);
-    printf("split block starts at %p -> value %lu \n", block, *block);
-    printf("split block ends at (%p) -> value %lu\n", endSize, *endSize);
-    printf("next free from split: %lu\n", *(block + 1));
-    printf("prev free from split: %lu\n", *(block + 2));
+    // printf("malloc starts at (%p) -> size: %lu \n", (void*)ptr, *ptr);
+    // printf("payload at %p\n", ptr + 1);
+    // printf("end of malloc block at (%p) -> size: %lu\n", (void*)secondSize, *secondSize);
+    // printf("split block starts at %p -> value %lu \n", block, *block);
+    // printf("split block ends at (%p) -> value %lu\n", endSize, *endSize);
+    // printf("next free from split: %lu\n", *(block + 1));
+    // printf("prev free from split: %lu\n", *(block + 2));
 
     return (void*)(ptr + 1);
 }
+
 void* findFit(void* start, size_t size) {
     /*
     finds the next fit beginning from the start pointer 
@@ -155,6 +157,7 @@ void* findFit(void* start, size_t size) {
     if (ptr == 0 || *ptr < size) return NULL;
     return setMallocBlock(ptr, size);  //reached end of list, not enough space
 }
+
 void* findBestFit(size_t size) {
     /*
     finds the smallest possible block that fits the size needed
@@ -173,12 +176,14 @@ void* findBestFit(size_t size) {
     }
     return setMallocBlock(bestFit, size);
 }
+
 size_t findNearestMultipleof8(size_t size) {
     if (size % 8 != 0)
         size += (8 - (size % 8));
     // we want the malloced block to be atleast 32 bytes so when we free, it will be big enough to store all meta data
     return size > 32 ? size : 32;
 }
+
 void* mymalloc(size_t size) {
     /*
     takes in N number of bytes and tries to find space in the heap to fit the data along w meta data needed
@@ -210,6 +215,33 @@ void* mymalloc(size_t size) {
     return ptr;
 }
 
+void coalesce(unsigned long* head, unsigned long* tail) {
+    //store old data
+    unsigned long tailSize = *tail;
+
+    //add tailSize to head's size
+    *(head) += tailSize;
+
+    //make tail's endSize the size of the coalesced block
+    unsigned long* tailEndSizePtr = tail + (tailSize / 8) - 1;
+    *tailEndSizePtr = *head;
+
+    //make head's next = tail's next
+    *(head + 1) = *(tail + 1);
+}
+
+void freeHeadandMakeItFirstFree(unsigned long* head) {
+    //set head's next to be firstBlock, prev to be 0
+    unsigned long* nextPtr = head + 1;
+    *nextPtr = (unsigned long)firstBlock;
+    unsigned long* prevPtr = head + 2;
+    *prevPtr = 0;
+    unsigned long* nextPrev = ((unsigned long*)firstBlock) + 1;  //set prev of next to head
+    *nextPrev = (unsigned long)head;
+    //make firstBlock head
+    firstBlock = head;
+}
+
 void myfree(void* ptr) {
     if (ptr == NULL) {
         return;
@@ -230,37 +262,42 @@ void myfree(void* ptr) {
         }
         find = find + ((*find) / 8);  // add the size at find to move to the next block
     }
-    if (find != head) {
-        printf("error: not a malloced address\n");
-        return;
-    }
-    if (!(*find & 0x1)) {  // bit is set at unallocated
+
+    if (prevFree != NULL) {
+        if (((head > prevFree) && (head < (prevFree + ((*prevFree) / 8))))) {  // address is apart of a free block then we will condiser it a double free
+            printf("error: double free\n");
+        }
+    } else if ((!(*find & 0x1) && find == head)) {  // the address is free already -> double free
         printf("error: double free\n");
+        return;
+    } else if (find != head) {  // the address is not malloced
+        printf("error: not a malloced address\n");
         return;
     }
 
     //you can free so start by setting unallocated bits
-    *head |= 0 << 0;
+    *head &= ~(1 << 0);
+    // printf("head (should have unalloc bit now) (%p) -> %lu \n", head, *head);
     unsigned long headSize = *head;
     unsigned long* endSizePtr = (head + (headSize / 8)) - 1;
-    *endSizePtr |= 0 << 0;
+    *endSizePtr &= ~(1 << 0);
 
     //prev free does not exist
     if (prevFree == NULL) {
-        printf("new first free block\n");
+        // printf("new first free block\n");
         freeHeadandMakeItFirstFree(head);
-    } else { // prev free exists
+    } else {  // prev free exists
         //mark prevfree's next block as head
         unsigned long oldNext = *(prevFree + 1);
-        *(prevFree + 1) = (unsigned long) head;
+        *(prevFree + 1) = (unsigned long)head;
 
         //make head's prev equal to prevFree, head's next equal to prevFree's next
         *(head + 1) = oldNext;
-        *(head + 2) = (unsigned long) prevFree;
+        *(head + 2) = (unsigned long)prevFree;
 
         //check if you should coalesce (prevFree is continguous)
         unsigned long* endOfPrevFree = prevFree + (*prevFree / 8);
-        if(endOfPrevFree == head){
+        if (endOfPrevFree == head) {
             coalesce(prevFree, head);
             //now, make head prevFree
             head = prevFree;
@@ -269,52 +306,29 @@ void myfree(void* ptr) {
 
     //check if endOfHeadPtr is a free block (contiguous)
     unsigned long* endOfHeadPtr = head + (*head / 8);
-    if(!(*endOfHeadPtr & 1)){ //endOfHeadPtr is a free block
+    if (!(*endOfHeadPtr & 1)) {  //endOfHeadPtr is a free block
         coalesce(head, endOfHeadPtr);
     }
 
-    printf("find = %p, head = %p, ptr = %p\n", find, head, ptr);
+    // printf("find = %p, head = %p, ptr = %p\n", find, head, ptr);
 }
-
-void coalesce(unsigned long* head, unsigned long* tail){
-    //store old data
-    unsigned long tailSize = *tail;
-    unsigned long* tailNext = *(tail + 1);
-
-    //add tailSize to head's size
-    *(head) += tailSize;
-
-    //make tail's endSize the size of the coalesced block
-    unsigned long* tailEndSizePtr = tail + (tailSize / 8) - 1;
-    tailEndSizePtr = *head;
-
-    //make head's next = tail's next
-    *(head + 1) = *(tail + 1);
-}
-
-void freeHeadandMakeItFirstFree(unsigned long* head){
-    //set head's next to be firstBlock, prev to be 0
-    unsigned long* nextPtr = head + 1;
-    *nextPtr = firstBlock;
-    unsigned long* prevPtr = head + 2;
-    *prevPtr = 0;
-
-    //make firstBlock head
-    firstBlock = head;
-}
-
 
 int main() {
-    myinit(2);
+    myinit(0);
     printf(" starting at : %p\n", heap);
     void* ptr = mymalloc(1048);
     printf(" pointer : %p\n", ptr);
     printf("firstBlock = %p\n", firstBlock);
 
-    void* ptr2 = mymalloc(5);
-    printf(" pointer 2 : %p\n", ptr2);
+    unsigned long* ptr2 = (unsigned long*)mymalloc(5);
+    printf("pointer 2 : %p\n", ptr2);
     printf("firstBlock = %p\n", firstBlock);
     myfree(ptr2);
+    printf("(%p) - > %lu\n", firstBlock, *((unsigned long*)firstBlock));
+    unsigned long* ptr3 = (unsigned long*)mymalloc(5);
+    printf("ptr 3 :%p -> %lu \n", ptr3, *ptr3);
+    myfree(ptr);
+    printf("(%p) - > %lu\n", firstBlock, *((unsigned long*)firstBlock));
     if (ptr == NULL || ptr2 == NULL) {
         printf("fuck\n");
     } else {
