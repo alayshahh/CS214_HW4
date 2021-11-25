@@ -39,7 +39,7 @@ void myinit(int allocArg) {
     unsigned long* beginningOfHeap = (unsigned long*)heap;
     *beginningOfHeap = BEGINNING_FREE_SPACE;
     *beginningOfHeap &= ~(1 << 0);  //set unallocated bit
-    printf("begin=%p\n", (void*)beginningOfHeap);
+    // printf("begin=%p\n", (void*)beginningOfHeap);
     // printf("value at point  = %zu\n", *point);
 
     unsigned long* next = (unsigned long*)(beginningOfHeap + 1);
@@ -52,7 +52,7 @@ void myinit(int allocArg) {
     unsigned long* endOfHeap = ((unsigned long*)heap) + 131071;  // (1MB - 8 bytes)/ 8 bytes
     *endOfHeap = BEGINNING_FREE_SPACE;
     *endOfHeap &= ~(1 << 0);  //set unallocated bit
-    printf("endheap=%p\n", (void*)endOfHeap);
+    // printf("endheap=%p\n", (void*)endOfHeap);
     endHeap = endOfHeap + 1;
     // printf("diff bw pointers: %ld \n", ((char*)point_2) - ((char*)point));
 
@@ -86,8 +86,8 @@ void* setMallocBlock(unsigned long* ptr, size_t size, size_t asked) {
 
     //there is enough space
     //do we split?
-    printf("pointer at: %p, value at pointer %lu \n", ptr, *ptr);
-    printf("*ptr (%lu) - size (%lu) = %lu bytes \n", *ptr, size, (*ptr - size));
+    // printf("pointer at: %p, value at pointer %lu \n", ptr, *ptr);
+    // printf("*ptr (%lu) - size (%lu) = %lu bytes \n", *ptr, size, (*ptr - size));
     if (((*ptr) - size) < 32) {  // dont split
         // printf("dont split");
         unsigned long* endSize = (ptr + (*ptr / 8)) - 1;
@@ -104,13 +104,13 @@ void* setMallocBlock(unsigned long* ptr, size_t size, size_t asked) {
         } else
             firstBlock = (void*)next;
         // set head of freeBlock
-        printf("malloced starts at: %p\n", ptr);
-        printf("payload at %p\n", ptr + 1);
-        printf("size of malloc: %lu\n", *ptr);
-        printf("next: %lu\n", *(ptr + 1));
-        printf("prev: %lu\n", *(ptr + 2));
-        printf("endSize: %lu\n", *endSize);
-        printf("ends at: %p\n", endSize);
+        // printf("malloced starts at: %p\n", ptr);
+        // printf("payload at %p\n", ptr + 1);
+        // printf("size of malloc: %lu\n", *ptr);
+        // printf("next: %lu\n", *(ptr + 1));
+        // printf("prev: %lu\n", *(ptr + 2));
+        // printf("endSize: %lu\n", *endSize);
+        // printf("ends at: %p\n", endSize);
 
         return (void*)(ptr + 2);
     }
@@ -170,7 +170,7 @@ void* findBestFit(size_t size, size_t ask) {
     unsigned long* ptr = firstBlock;
     unsigned long* bestFit = NULL;
     while (ptr != 0) {
-        printf(" finding best fit, checking %p...\n", ptr);
+        // printf(" finding best fit, checking %p...\n", ptr);
         if (*ptr >= size) {
             if (bestFit == NULL) {
                 bestFit = ptr;
@@ -235,9 +235,9 @@ void coalesce(unsigned long* head, unsigned long* tail) {
 
     //make head's next = tail's next
     *(head + 1) = *(tail + 1);
-    printf("head next %p\n", (unsigned long*)*(head + 1));
+    // printf("head next %p\n", (unsigned long*)*(head + 1));
 
-    printf("tail next %p\n", (unsigned long*)*(tail + 1));
+    // printf("tail next %p\n", (unsigned long*)*(tail + 1));
 }
 
 void freeHeadandMakeItFirstFree(unsigned long* head) {
@@ -283,7 +283,7 @@ void myfree(void* ptr) {
     //you can free so start by setting unallocated bits
 
     *head &= ~(1 << 0);
-    printf("freeing head @ %p -> %lu\n", head, *head);
+    // printf("freeing head @ %p -> %lu\n", head, *head);
     askedSize -= *(head + 1);    // for utilization() subtracts the amount of bytes asked by the user
     amountAllocated -= *(head);  //subtracts the acutal amount of bytes allocated for a user's request
     // printf("head (should have unalloc bit now) (%p) -> %lu \n", head, *head);
@@ -291,7 +291,7 @@ void myfree(void* ptr) {
     unsigned long* endSizePtr = (head + (headSize / 8)) - 1;
 
     *endSizePtr &= ~(1 << 0);
-    printf("end of free block @ %p -> %lu\n", endSizePtr, *endSizePtr);
+    // printf("end of free block @ %p -> %lu\n", endSizePtr, *endSizePtr);
     //prev free does not exist
     if (prevFree == NULL) {
         // printf("new first free block\n");

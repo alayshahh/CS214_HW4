@@ -1,14 +1,12 @@
 #include <stdio.h>
-#include <stdlib.h>
+
+#include "mymalloc.h"
 
 int main(int argc, char** argv) {
-    char* ptr_1 = malloc(sizeof(char) * 25);
-    printf("%p\n", ptr_1);
-
-    char* ptr_2 = malloc(sizeof(char) * 25);
-    printf("%p\n", ptr_2);
-    free(ptr_1);
-    free(ptr_2);
-    free(ptr_1 + 1);
-    // free(ptr_2);
+    myinit(0);
+    void* ptr = mymalloc(12043);
+    printf("before free, asked for 12043 bytes, util: %f, used %f bytes\n", utilization(), 12043 / utilization());
+    myfree(ptr);
+    printf("util: %f", utilization());
+    mycleanup();
 }
