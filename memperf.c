@@ -13,20 +13,32 @@ typedef struct MemPerf {
 
 typedef struct List {
     Node* head;
-    int numNodes;
 } List;
 void addPointer(List* pointers, Node* new) {
-    new->next = pointers->head->next;
+    if (pointers->head == NULL) {
+        new->next = NULL;
+    } else
+        new->next = pointers->head->next;
     pointers->head = new;
-    pointers->numNodes = pointers->numNodes + 1;
+}
+
+int sizeList(List* pointers) {
+    Node* ptr = pointers->head;
+    int size = 0;
+    while (ptr != NULL) {
+        ptr = ptr->next;
+        size++;
+    }
+    return size;
 }
 
 Node* getRandomNode(List* pointer) {
-    int i = rand() % pointer->numNodes;
+    int i = rand() % sizeList(pointer);
     Node* random = pointer->head;
     for (; i > 0; i--) {
         random = random->next;
     }
+    // printf("random node: %p\n", random);
     return random;
 }
 
@@ -54,12 +66,11 @@ Node* createNode(void* node) {
     new->next = NULL;
     return new;
 }
-int OPERATIONS = 100;
+int OPERATIONS = 1000000;
 
 void performance(int allocAlg) {
     myinit(allocAlg);
     List pointers;
-    pointers.numNodes = 0;
     pointers.head = NULL;
     time_t begin;
     time_t end;
@@ -73,8 +84,32 @@ void performance(int allocAlg) {
             if free -> pick random node, myfree, delete node if all is good in the hood
             
         */
+        int op = rand() % 2;
+        if (pointers.head == NULL) {
+            op = 0;
+        }
+        if (op == 0) {
+            void* ptr = mymalloc((size_t)(rand() % 256) + 1);
+            if (ptr == NULL) {
+                // printf("error: unable to malloc\n");
+                ;
+            } else {
+                Node* new = createNode(ptr);
+                addPointer(&pointers, new);
+            }
+        } else if (op == 1) {
+            Node* node = getRandomNode(&pointers);
+            myfree(node->node);
+            deleteNode(&pointers, node);
+        } else if (op == 2) {
+            Node* node = getRandomNode(&pointers);
+            node->node = myrealloc(node->node, (size_t)(rand() % 257));
+            deleteNode(&pointers, node);
+            if (node->node == NULL) {
+                deleteNode(&pointers, node);
+            }
+        }
     }
-    sleep(10);
     time(&end);
     time_t timePass = end - begin;
     double opRate = OPERATIONS / (double)timePass;
