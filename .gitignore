@@ -1,6 +1,8 @@
 *
 # Unignore all with extensions
 !*.*
+#unignore makefile
+!Makefile
 # Unignore all dirs
 !*/
 
