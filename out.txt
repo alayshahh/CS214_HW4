@@ -1,0 +1,16 @@
+
+irst fit throughput: 625000.000000 ops/sec
+First fit utilization: 0.82
+ 	malloc: 9699854
+	 free: 300146
+	realloc: 0
+Next fit throughput: 344827.586207 ops/sec
+Next fit utilization: 0.82
+	malloc: 9439637
+	 free: 560363
+	realloc: 0
+Best fit throughput: 322580.645161 ops/sec
+Best fit utilization: 0.82
+	malloc: 9439163
+	free: 560837
+	realloc: 0
