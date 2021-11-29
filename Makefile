@@ -4,7 +4,7 @@ CFLAGS = -Wall -g -fsanitize=address
 	gcc $(CFLAGS) -o $@ $^
 
 all:
-	gcc $(CFLAGS) -o mymalloc mymalloc.c
+	gcc $(CFLAGS) -o  memperf  memperf.c mymalloc.c
 
 debug:
 	gcc -g -Werror -Wvla -o memperf  memperf.c mymalloc.c
