@@ -417,7 +417,7 @@ void* myrealloc(void* ptr, size_t size) {
     //check if next block is free
     unsigned long* nextBlock = startOfBlock + *startOfBlock;
 
-    //so, you can resize within the block
+    //resize within the block if possible
     if(oldPayloadSize > size){
         int sizeDifference = oldPayloadSize - size;
         size = size + 24;
@@ -456,7 +456,7 @@ void* myrealloc(void* ptr, size_t size) {
                 }
 
                 //save prevFree's next
-                unsigned long oldNext = *prevFree + 1;
+                unsigned long oldNext = *(prevFree + 1);
 
                 //set up slackPtr to be a free block
                 *slackPtr = sizeDifference;
@@ -495,7 +495,7 @@ void* myrealloc(void* ptr, size_t size) {
         } else {
             return NULL;
         }
-        
+
         //free old ptr
         myfree(ptr);
         return newPtr;
