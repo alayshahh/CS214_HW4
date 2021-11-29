@@ -419,7 +419,7 @@ void* myrealloc(void* ptr, size_t size) {
 
     //so, you can resize within the block
     if(oldPayloadSize > size){
-        int difference = oldPayloadSize - size;
+        int sizeDifference = oldPayloadSize - size;
         size = size + 24;
         size = findNearestMultipleof8(size);
 
@@ -428,7 +428,7 @@ void* myrealloc(void* ptr, size_t size) {
         *startOfBlock |= 1 << 0;
 
         //set endsize
-        unsigned long* endSize = startOfBlock + (size / 3) - 1;
+        unsigned long* endSize = startOfBlock + (size / 8) - 1;
         *endSize = size;
         *endSize |= 1 << 0;
 
@@ -441,16 +441,55 @@ void* myrealloc(void* ptr, size_t size) {
             //set unallocated bit
             coalesce(slackPtr, nextBlock);
         } else { //next block is allocated, so see what you can do with the slackPtr
-            if(difference > 32){ //you can make it it's own free block
+            if(sizeDifference > 32){ //you can make it it's own free block
+                //find prev free
+                unsigned long* find = heap;
+                unsigned long* prevFree = NULL;
+                while (find < slackPtr) {
+                    if (!(*find & 0x1)) {  // free block
+                        prevFree = find;
+                    }
+                    find = find + ((*find) / 8);  // add the size at find to move to the next block
+                }
+                if(prevFree == NULL){ //what to do here?
 
+                }
+
+                //save prevFree's next
+                unsigned long oldNext = *prevFree + 1;
+
+                //set up slackPtr to be a free block
+                *slackPtr = sizeDifference;
+                unsigned long* nextPtr = slackPtr + 1;
+                *nextPtr = oldNext;
+                unsigned long* prevPtr = slackPtr + 2;
+                *prevPtr = (unsigned long) prevFree;
+                unsigned long* endSize = slackPtr + (*slackPtr / 8) - 1;
+                *endSize = sizeDifference;
+                *endSize &= ~(1 << 0);
+
+                //set prevFree's next to be slackPtr 
+                unsigned long* prevFreeNext = prevFree + 1;
+                *prevFree = (unsigned long) slackPtr;
+
+                //set nextFree's prev to be slackPtr
+                unsigned long* nextFree = (unsigned long*) oldNext;
+                unsigned long* nextFreePrev = nextFree + 2;
+                *nextFreePrev = (unsigned long) slackPtr;
             }
         }
+        return startOfBlock; 
+    } else { //find a new block
+        unsigned long* newPtr = mymalloc(size);
+        if(newPtr != NULL){
+            //copy over data
 
-
-    } else {
-
+        }
+        //free old ptr
+        myfree(ptr);
+        return newPtr;
     }
-
+    return NULL;
 }
 
 // int main() {
