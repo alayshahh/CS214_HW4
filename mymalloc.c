@@ -108,10 +108,10 @@ void* setMallocBlock(unsigned long* ptr, size_t size, size_t asked) {
         *endSize |= 1 << 0;  // set allocated bit at end
         *ptr |= 1 << 0;      //set allocated bit in front
         nextBlock = (void*)next;
-        if (next != 0) {
+        if (next != 0) {  //set next prev equal to current prev
             *((unsigned long*)next + 2) = prev;
         }
-        if (prev != 0) {
+        if (prev != 0) {  //set prev's next equal to current next
             *((unsigned long*)prev + 1) = next;
         } else
             firstBlock = (void*)next;
@@ -142,10 +142,16 @@ void* setMallocBlock(unsigned long* ptr, size_t size, size_t asked) {
     unsigned long* block = (secondSize + 1);
     *block = oldSize - size;
     *block &= ~(1 << 0);  //set unallocated bit
-    *(block + 1) = next;
-    *(block + 2) = prev;
+    *(block + 1) = next;  //set block next to current next
+    *(block + 2) = prev;  //set block prev to current prev
     if (prev == 0) {
         firstBlock = (void*)block;
+    } else {
+        *((unsigned long*)prev + 1) = (unsigned long)block;
+        if (DEBUG) printf("prev next %p\n", (unsigned long*)*((unsigned long*)prev + 1));  //set the prev next to block
+    }
+    if (next != 0) {  //set next prev equal to block
+        *((unsigned long*)next + 2) = (unsigned long)block;
     }
     nextBlock = (void*)block;
     unsigned long* endSize = (ptr + (oldSize / 8) - 1);
@@ -174,8 +180,11 @@ void* findFit(void* start, size_t size, size_t ask) {
         return NULL;
     }
     unsigned long* ptr = (unsigned long*)start;
+
+    if (DEBUG) printf("looking at %p, head is %p start is %p\n", ptr, heap, start);
     while (ptr != 0 && *(ptr) < size) {
         ptr = (unsigned long*)*(ptr + 1);
+        if (DEBUG) printf("looking at %p, head is %p start is %p\n", ptr, heap, start);
     }
     if (ptr == 0 || *ptr < size) return NULL;
     return setMallocBlock(ptr, size, ask);  //reached end of list, not enough space
@@ -228,6 +237,7 @@ void* mymalloc(size_t size) {
     // printf("Size = %lu\n", size);
     void* ptr = NULL;
     if (allocAlg == FIRST_FIT) {
+        // printf("asked for %lu, giving them %lu\n", mallocAsk, size);
         ptr = findFit(firstBlock, size, mallocAsk);
     } else if (allocAlg == NEXT_FIT) {
         // printf("next fit");
@@ -241,6 +251,13 @@ void* mymalloc(size_t size) {
     
     if (ptr != NULL) {
         askedSize += mallocAsk;
+        size = *((unsigned long*)ptr - 2);
+        size &= ~(1 << 0);
+        amountUsed += size;
+    }
+    if (DEBUG) {
+        printf("%f amount used (space left = %f), %lu amount needed\n FREE LIST: \n", amountUsed, (1024 * 1024) - amountUsed, size);
+        // printFreeList();
     }
     return ptr;
 }
@@ -258,6 +275,11 @@ void coalesce(unsigned long* head, unsigned long* tail) {
 
     //make head's next = tail's next
     *(head + 1) = *(tail + 1);
+    //now make next's prev equal to head
+    unsigned long* next = (unsigned long*)*(head + 1);
+    if (next != NULL) {
+        *(next + 2) = (unsigned long)head;
+    }
 
     // printf("head next %p\n", (unsigned long*)*(head + 1));
 
@@ -305,6 +327,8 @@ void myfree(void* ptr) {
         return;
     } else if (!(*find & 0x1)) {  // the address is free already -> double free{
         printf("error: double free\n");
+    } else if (DEBUG) {
+        printf("found head\n");
     }
 
     //you can free so start by setting unallocated bits
@@ -324,13 +348,16 @@ void myfree(void* ptr) {
         freeHeadandMakeItFirstFree(head);
     } else {  // prev free exists
         //mark prevfree's next block as head
-        unsigned long oldNext = *(prevFree + 1);
+        unsigned long* oldNext = (unsigned long*)*(prevFree + 1);
         *(prevFree + 1) = (unsigned long)head;
 
-        //make head's prev equal to prevFree, head's next equal to prevFree's next
-        *(head + 1) = oldNext;
-        *(head + 2) = (unsigned long)prevFree;
+        if (oldNext != 0) {
+            *(oldNext + 2) = (unsigned long)head;
+        }
 
+        //make head's prev equal to prevFree, head's next equal to prevFree's next
+        *(head + 1) = (unsigned long)oldNext;
+        *(head + 2) = (unsigned long)prevFree;
         //check if you should coalesce (prevFree is continguous)
         unsigned long* endOfPrevFree = prevFree + (*prevFree / 8);
         if (endOfPrevFree == head) {
@@ -351,7 +378,7 @@ void myfree(void* ptr) {
     if (endOfHeadPtr == nextBlock) {  // if next block is coalesed, we want to update the pointer to it
         nextBlock = head;
     }
-
+    // printFreeList();
     // printf("find = %p, head = %p, ptr = %p\n", find, head, ptr);
 }
 
@@ -415,7 +442,7 @@ void* myrealloc(void* ptr, size_t size) {
             coalesce(slackPtr, nextBlock);
         } else { //next block is allocated, so see what you can do with the slackPtr
             if(difference > 32){ //you can make it it's own free block
-                
+
             }
         }
 
