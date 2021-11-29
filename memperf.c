@@ -31,6 +31,15 @@ int sizeList(List* pointers) {
     }
     return size;
 }
+void freeList(List* pointers) {
+    Node* ptr = pointers->head;
+    while (ptr != NULL) {
+        Node* prev = ptr;
+        ptr = ptr->next;
+        free(prev);
+    }
+    return;
+}
 
 Node* getRandomNode(List* pointer) {
     int i = rand() % sizeList(pointer);
