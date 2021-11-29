@@ -11,6 +11,7 @@ void* endHeap;
 void* firstBlock;  //contains address of the first free block
 void* nextBlock;   //for next fit algo
 double askedSize = 0;
+double amountUsed = 0;
 int allocAlg = -1;
 
 /*
@@ -28,6 +29,13 @@ int allocAlg = -1;
     header & footer size in free = 32 bytes
     header & footer size in used block = 16 bytes
 */
+void printFreeList() {
+    unsigned long* ptr = (unsigned long*)firstBlock;
+    while (ptr != NULL) {
+        printf("\tthe current pointer is at %p, the size of this block is: %lu, next free block @ %lx, prev block @ %lx\n", ptr, *ptr, *(ptr + 1), *(ptr + 2));
+        ptr = (unsigned long*)*(ptr + 1);
+    }
+}
 
 void myinit(int allocArg) {
     /*
@@ -77,9 +85,12 @@ void mycleanup() {
     */
     firstBlock = NULL;
     nextBlock = NULL;
+    endHeap = NULL;
     askedSize = 0;
+    amountUsed = 0;
     allocAlg = -1;
     free(heap);
+    heap = NULL;
 }
 
 void* setMallocBlock(unsigned long* ptr, size_t size, size_t asked) {
@@ -248,7 +259,7 @@ void* mymalloc(size_t size) {
         }
     } else if (allocAlg == BEST_FIT) {  //best fit
         ptr = findBestFit(size, mallocAsk);
-    
+    }
     if (ptr != NULL) {
         askedSize += mallocAsk;
         size = *((unsigned long*)ptr - 2);
@@ -400,25 +411,25 @@ double utilization() {
 }
 
 void* myrealloc(void* ptr, size_t size) {
-    if(ptr == NULL && size == 0){
+    if (ptr == NULL && size == 0) {
         return NULL;
     }
-    if(ptr == NULL){
+    if (ptr == NULL) {
         return mymalloc(size);
     }
-    if(size == 0){
+    if (size == 0) {
         myfree(ptr);
         return NULL;
     }
 
-    unsigned long* startOfBlock = (unsigned long *) ptr - 2;
+    unsigned long* startOfBlock = (unsigned long*)ptr - 2;
     size_t oldPayloadSize = (*startOfBlock & -2) - 3;
 
     //check if next block is free
     unsigned long* nextBlock = startOfBlock + *startOfBlock;
 
     //resize within the block if possible
-    if(oldPayloadSize > size){
+    if (oldPayloadSize > size) {
         int sizeDifference = oldPayloadSize - size;
         size = size + 24;
         size = findNearestMultipleof8(size);
@@ -437,11 +448,11 @@ void* myrealloc(void* ptr, size_t size) {
         *slackPtr &= ~(1 << 0);
 
         //if the next block is free, coalesce
-        if(!(*nextBlock & 0x1)){
+        if (!(*nextBlock & 0x1)) {
             //set unallocated bit
             coalesce(slackPtr, nextBlock);
-        } else { //next block is allocated, so see what you can do with the slackPtr
-            if(sizeDifference > 32){ //you can make it it's own free block
+        } else {                        //next block is allocated, so see what you can do with the slackPtr
+            if (sizeDifference > 32) {  //you can make it it's own free block
                 //find prev free
                 unsigned long* find = heap;
                 unsigned long* prevFree = NULL;
@@ -451,8 +462,7 @@ void* myrealloc(void* ptr, size_t size) {
                     }
                     find = find + ((*find) / 8);  // add the size at find to move to the next block
                 }
-                if(prevFree == NULL){ //what to do here?
-
+                if (prevFree == NULL) {  //what to do here?
                 }
 
                 //save prevFree's next
@@ -463,31 +473,31 @@ void* myrealloc(void* ptr, size_t size) {
                 unsigned long* nextPtr = slackPtr + 1;
                 *nextPtr = oldNext;
                 unsigned long* prevPtr = slackPtr + 2;
-                *prevPtr = (unsigned long) prevFree;
+                *prevPtr = (unsigned long)prevFree;
                 unsigned long* endSize = slackPtr + (*slackPtr / 8) - 1;
                 *endSize = sizeDifference;
                 *endSize &= ~(1 << 0);
 
-                //set prevFree's next to be slackPtr 
+                //set prevFree's next to be slackPtr
                 unsigned long* prevFreeNext = prevFree + 1;
-                *prevFree = (unsigned long) slackPtr;
+                *prevFree = (unsigned long)slackPtr;
 
                 //set nextFree's prev to be slackPtr
-                unsigned long* nextFree = (unsigned long*) oldNext;
+                unsigned long* nextFree = (unsigned long*)oldNext;
                 unsigned long* nextFreePrev = nextFree + 2;
-                *nextFreePrev = (unsigned long) slackPtr;
+                *nextFreePrev = (unsigned long)slackPtr;
             }
         }
-        return startOfBlock; 
-    } else { //find a new block
+        return startOfBlock;
+    } else {  //find a new block
         unsigned long* newPtr = mymalloc(size);
-        if(newPtr != NULL){
+        if (newPtr != NULL) {
             //copy over data
             unsigned long* newPayload = newPtr + 2;
-            unsigned long* oldPayload = (unsigned long*) ptr + 2;
+            unsigned long* oldPayload = (unsigned long*)ptr + 2;
             unsigned long* endOfPayload = ptr + ((*ptr & -2) / 8) - 1;
 
-            while(oldPayload < endOfPayload){
+            while (oldPayload < endOfPayload) {
                 *newPayload = *oldPayload;
                 oldPayload += 1;
                 newPayload += 1;
@@ -528,5 +538,5 @@ void* myrealloc(void* ptr, size_t size) {
 //     } else {
 //         printf("making progress\n");
 //     }
-//     free(heap);
+//     mycleanup(heap);
 // }
