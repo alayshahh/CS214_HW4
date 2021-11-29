@@ -483,8 +483,19 @@ void* myrealloc(void* ptr, size_t size) {
         unsigned long* newPtr = mymalloc(size);
         if(newPtr != NULL){
             //copy over data
+            unsigned long* newPayload = newPtr + 2;
+            unsigned long* oldPayload = (unsigned long*) ptr + 2;
+            unsigned long* endOfPayload = ptr + ((*ptr & -2) / 8) - 1;
 
+            while(oldPayload < endOfPayload){
+                *newPayload = *oldPayload;
+                oldPayload += 1;
+                newPayload += 1;
+            }
+        } else {
+            return NULL;
         }
+        
         //free old ptr
         myfree(ptr);
         return newPtr;
