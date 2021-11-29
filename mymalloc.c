@@ -410,7 +410,41 @@ double utilization() {
 }
 
 void* myrealloc(void* ptr, size_t size) {
-    return ptr;
+    if(ptr == NULL && size == 0){
+        return NULL;
+    }
+    if(ptr == NULL){
+        return mymalloc(size);
+    }
+    if(size == 0){
+        myfree(ptr);
+        return NULL;
+    }
+
+    unsigned long* startOfBlock = (unsigned long *) ptr - 2;
+    size_t oldSize = *startOfBlock & -2;
+
+    if(oldSize > size){
+        int difference = oldSize - size;
+        if(difference > 32){
+            //change block size
+            *startOfBlock = size;
+
+            //set allocated bit
+            *startOfBlock |= 1 << 0;
+
+            //set requested size
+            unsigned long* requestedSize = startOfBlock + 1;
+            *requestedSize = size;
+
+
+        } else {
+            //nullify that difference?
+        }
+    } else {
+
+    }
+
 }
 
 // int main() {
