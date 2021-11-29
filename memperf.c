@@ -15,10 +15,7 @@ typedef struct List {
     Node* head;
 } List;
 void addPointer(List* pointers, Node* new) {
-    if (pointers->head == NULL) {
-        new->next = NULL;
-    } else
-        new->next = pointers->head->next;
+    new->next = pointers->head;
     pointers->head = new;
 }
 
@@ -31,14 +28,30 @@ int sizeList(List* pointers) {
     }
     return size;
 }
-void freeList(List* pointers) {
-    Node* ptr = pointers->head;
-    while (ptr != NULL) {
-        Node* prev = ptr;
-        ptr = ptr->next;
-        free(prev);
+void deleteNode(List* pointers, Node* node) {
+    if (pointers->head == node) {
+        pointers->head = pointers->head->next;
+        free(node);
+        return;
     }
-    return;
+    Node* ptr = pointers->head;
+
+    while (ptr->next != node && ptr->next != NULL) {
+        ptr = ptr->next;
+    }
+    if (ptr->next == NULL) {
+        printf("node not found\n");
+    } else {
+        ptr->next = node->next;
+        free(node);
+    }
+}
+void freeList(List* pointers) {
+    while (pointers->head != NULL) {
+        Node* ptr = pointers->head;
+        pointers->head = pointers->head->next;
+        free(ptr);
+    }
 }
 
 Node* getRandomNode(List* pointer) {
@@ -51,31 +64,13 @@ Node* getRandomNode(List* pointer) {
     return random;
 }
 
-void deleteNode(List* pointers, Node* node) {
-    Node* ptr = pointers->head;
-    if (ptr == node) {
-        pointers->head = pointers->head->next;
-        free(node);
-        return;
-    }
-    while (ptr->next != node && ptr->next != NULL) {
-        ptr = ptr->next;
-    }
-    if (ptr->next == NULL) {
-        printf("node not found\n");
-    } else {
-        ptr->next = ptr->next->next;
-        free(ptr->next);
-    }
-}
-
 Node* createNode(void* node) {
     Node* new = (Node*)malloc(sizeof(Node));
     new->node = node;
     new->next = NULL;
     return new;
 }
-int OPERATIONS = 10;
+int OPERATIONS = 10000000;
 
 void performance(int allocAlg) {
     myinit(allocAlg);
@@ -96,6 +91,7 @@ void performance(int allocAlg) {
             if free -> pick random node, myfree, delete node if all is good in the hood
             
         */
+        // printf("******** NEW REQUEST *********\n");
         int op = rand() % 3;
         if (pointers.head == NULL) {
             op = 0;
@@ -142,6 +138,7 @@ void performance(int allocAlg) {
             break;
     }
     mycleanup();
+    freeList(&pointers);
 }
 
 int main(int argc, char** argv) {
