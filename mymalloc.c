@@ -11,7 +11,6 @@ void* endHeap;
 void* firstBlock;  //contains address of the first free block
 void* nextBlock;   //for next fit algo
 double askedSize = 0;
-double amountUsed = 0;
 int allocAlg = -1;
 
 /*
@@ -29,14 +28,6 @@ int allocAlg = -1;
     header & footer size in free = 32 bytes
     header & footer size in used block = 16 bytes
 */
-
-void printFreeList() {
-    unsigned long* ptr = (unsigned long*)firstBlock;
-    while (ptr != NULL) {
-        printf("\tthe current pointer is at %p, the size of this block is: %lu, next free block @ %lx, prev block @ %lx\n", ptr, *ptr, *(ptr + 1), *(ptr + 2));
-        ptr = (unsigned long*)*(ptr + 1);
-    }
-}
 
 void myinit(int allocArg) {
     /*
@@ -86,12 +77,9 @@ void mycleanup() {
     */
     firstBlock = NULL;
     nextBlock = NULL;
-    endHeap = NULL;
     askedSize = 0;
-    amountUsed = 0;
     allocAlg = -1;
     free(heap);
-    heap = NULL;
 }
 
 void* setMallocBlock(unsigned long* ptr, size_t size, size_t asked) {
@@ -139,6 +127,7 @@ void* setMallocBlock(unsigned long* ptr, size_t size, size_t asked) {
             printf("endSize: %lu\n", *endSize);
             printf("ends at: %p\n", endSize);
         }
+
         return (void*)(ptr + 2);
     }
     *ptr = size;
@@ -199,7 +188,9 @@ void* findBestFit(size_t size, size_t ask) {
     unsigned long* ptr = firstBlock;
     unsigned long* bestFit = NULL;
     while (ptr != 0) {
-        // printf(" finding best fit, checking %p it has size of %lu \n", ptr, *ptr);
+        if (DEBUG) {
+            printf(" finding best fit, checking %p...\n", ptr);
+        }
 
         if (*ptr >= size) {
             if (bestFit == NULL) {
@@ -247,16 +238,9 @@ void* mymalloc(size_t size) {
         }
     } else if (allocAlg == BEST_FIT) {  //best fit
         ptr = findBestFit(size, mallocAsk);
-    }
+    
     if (ptr != NULL) {
         askedSize += mallocAsk;
-        size = *((unsigned long*)ptr - 2);
-        size &= ~(1 << 0);
-        amountUsed += size;
-    }
-    if ((ptr == NULL) && DEBUG) {
-        printf("%f amount used (space left = %f), %lu amount needed\n", amountUsed, (1024 * 1024) - amountUsed, size);
-        printFreeList();
     }
     return ptr;
 }
@@ -328,7 +312,6 @@ void myfree(void* ptr) {
     *head &= ~(1 << 0);
     // printf("freeing head @ %p -> %lu\n", head, *head);
     askedSize -= *(head + 1);  // for utilization() subtracts the amount of bytes asked by the user
-    amountUsed -= *head;       // tkeeps track of amount of space currently left in heap
     // printf("head (should have unalloc bit now) (%p) -> %lu \n", head, *head);
     unsigned long headSize = *head;
     unsigned long* endSizePtr = (head + (headSize / 8)) - 1;
@@ -384,8 +367,8 @@ double utilization() {
             lastUsed = ptr;        //set last use to the end of the block
         }
     }
-    printf(" amount used at end %f, amount asked for %f\n", amountUsed, askedSize);
-
+    printf("last used : %p, heap %p, difference: %lu", lastUsed, heap, ((lastUsed - (unsigned long*)heap)));
+    printf("asked size: %f\n ", askedSize);
     return askedSize / (8 * (lastUsed - (unsigned long*)heap));
 }
 
@@ -402,25 +385,41 @@ void* myrealloc(void* ptr, size_t size) {
     }
 
     unsigned long* startOfBlock = (unsigned long *) ptr - 2;
-    size_t oldSize = *startOfBlock & -2;
+    size_t oldPayloadSize = (*startOfBlock & -2) - 3;
 
-    if(oldSize > size){
-        int difference = oldSize - size;
-        if(difference > 32){
-            //change block size
-            *startOfBlock = size;
+    //check if next block is free
+    unsigned long* nextBlock = startOfBlock + *startOfBlock;
 
-            //set allocated bit
-            *startOfBlock |= 1 << 0;
+    //so, you can resize within the block
+    if(oldPayloadSize > size){
+        int difference = oldPayloadSize - size;
+        size = size + 24;
+        size = findNearestMultipleof8(size);
 
-            //set requested size
-            unsigned long* requestedSize = startOfBlock + 1;
-            *requestedSize = size;
+        //set new size in the block
+        *startOfBlock = size;
+        *startOfBlock |= 1 << 0;
 
+        //set endsize
+        unsigned long* endSize = startOfBlock + (size / 3) - 1;
+        *endSize = size;
+        *endSize |= 1 << 0;
 
-        } else {
-            //nullify that difference?
+        //slack ptr, basically, the left over memory
+        unsigned long* slackPtr = endSize + 1;
+        *slackPtr &= ~(1 << 0);
+
+        //if the next block is free, coalesce
+        if(!(*nextBlock & 0x1)){
+            //set unallocated bit
+            coalesce(slackPtr, nextBlock);
+        } else { //next block is allocated, so see what you can do with the slackPtr
+            if(difference > 32){ //you can make it it's own free block
+                
+            }
         }
+
+
     } else {
 
     }
@@ -428,7 +427,7 @@ void* myrealloc(void* ptr, size_t size) {
 }
 
 // int main() {
-//     myinit(1);
+//     myinit(2);
 //     unsigned long* ptr = (unsigned long*)mymalloc(1048);
 //     printf("ptr malloc bytes : %p, asked: %lu, given: %lu\n", ptr, *(ptr - 1), *(ptr - 2));
 //     // printf("first block: (%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
@@ -440,18 +439,17 @@ void* myrealloc(void* ptr, size_t size) {
 //     unsigned long* ptr3 = (unsigned long*)mymalloc(5);
 //     printf("ptr3 malloc: %p, asked: %lu, given: %lu\n", ptr3, *(ptr3 - 1), *(ptr3 - 2));
 //     myfree(ptr);
-//     printf("UTILIZATION : %f\n", utilization());
-//     printf("first block(%p) - > %lu firstBlock next: %lu \n", firstBlock, *((unsigned long*)firstBlock), *(((unsigned long*)firstBlock) + 1));
+//     // printf("first block(%p) - > %lu firstBlock next: %lu \n", firstBlock, *((unsigned long*)firstBlock), *(((unsigned long*)firstBlock) + 1));
 //     unsigned long* ptr4 = (unsigned long*)mymalloc(1040);
 //     if (ptr4 == ptr) {
-//         printf("fuck yes baby\n UTILIZATION: %f \n", utilization());
+//         printf("fuck yes baby\n");
 //     } else {
-//         printf("ptr4: %p, ptr: %p \n UTILIZATION: %f \n", ptr4, ptr, utilization());
+//         printf("ptr4: %p, ptr: %p", ptr4, ptr);
 //     }
 //     if (ptr == NULL || ptr2 == NULL) {
 //         printf("fuck\n");
 //     } else {
 //         printf("making progress\n");
 //     }
-//     mycleanup();
+//     free(heap);
 // }
