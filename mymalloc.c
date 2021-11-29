@@ -480,7 +480,7 @@ void* myrealloc(void* ptr, size_t size) {
 
                 //set prevFree's next to be slackPtr
                 unsigned long* prevFreeNext = prevFree + 1;
-                *prevFree = (unsigned long)slackPtr;
+                *prevFreeNext = (unsigned long)slackPtr;
 
                 //set nextFree's prev to be slackPtr
                 unsigned long* nextFree = (unsigned long*)oldNext;
@@ -495,7 +495,8 @@ void* myrealloc(void* ptr, size_t size) {
             //copy over data
             unsigned long* newPayload = newPtr + 2;
             unsigned long* oldPayload = (unsigned long*)ptr + 2;
-            unsigned long* endOfPayload = ptr + ((*ptr & -2) / 8) - 1;
+            unsigned long* ogPtr = (unsigned long*) ptr;
+            unsigned long* endOfPayload = ogPtr + ((*ogPtr & -2) / 8) - 1;
 
             while (oldPayload < endOfPayload) {
                 *newPayload = *oldPayload;
