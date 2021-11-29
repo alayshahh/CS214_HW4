@@ -31,6 +31,15 @@ int sizeList(List* pointers) {
     }
     return size;
 }
+void freeList(List* pointers) {
+    Node* ptr = pointers->head;
+    while (ptr != NULL) {
+        Node* prev = ptr;
+        ptr = ptr->next;
+        free(prev);
+    }
+    return;
+}
 
 Node* getRandomNode(List* pointer) {
     int i = rand() % sizeList(pointer);
@@ -66,7 +75,7 @@ Node* createNode(void* node) {
     new->next = NULL;
     return new;
 }
-int OPERATIONS = 1000000;
+int OPERATIONS = 10;
 
 void performance(int allocAlg) {
     myinit(allocAlg);
@@ -75,6 +84,9 @@ void performance(int allocAlg) {
     time_t begin;
     time_t end;
     time(&begin);
+    int num_free = 0;
+    int num_malloc = 0;
+    int num_realloc = 0;
     for (int i = 0; i < OPERATIONS; i++) {
         /*
             if head is not null, then just rnad b/w 0-2 (malloc, free, realloc)
@@ -84,11 +96,12 @@ void performance(int allocAlg) {
             if free -> pick random node, myfree, delete node if all is good in the hood
             
         */
-        int op = rand() % 2;
+        int op = rand() % 3;
         if (pointers.head == NULL) {
             op = 0;
         }
         if (op == 0) {
+            num_malloc++;
             void* ptr = mymalloc((size_t)(rand() % 256) + 1);
             if (ptr == NULL) {
                 // printf("error: unable to malloc\n");
@@ -98,13 +111,14 @@ void performance(int allocAlg) {
                 addPointer(&pointers, new);
             }
         } else if (op == 1) {
+            num_free++;
             Node* node = getRandomNode(&pointers);
             myfree(node->node);
             deleteNode(&pointers, node);
         } else if (op == 2) {
+            num_realloc++;
             Node* node = getRandomNode(&pointers);
             node->node = myrealloc(node->node, (size_t)(rand() % 257));
-            deleteNode(&pointers, node);
             if (node->node == NULL) {
                 deleteNode(&pointers, node);
             }
@@ -116,13 +130,13 @@ void performance(int allocAlg) {
     double util = utilization();
     switch (allocAlg) {
         case FIRST_FIT:
-            printf("First fit throughput: %.2f ops/sec\nFirst fit utilization: %.2f\n", opRate, util);
+            printf("First fit throughput: %f ops/sec\nFirst fit utilization: %f\n \tmalloc: %d\n\t free: %d\n\trealloc: %d\n", opRate, util, num_malloc, num_free, num_realloc);
             break;
         case NEXT_FIT:
-            printf("Next fit throughput: %.2f ops/sec\nNext fit utilization: %.2f\n", opRate, util);
+            printf("Next fit throughput: %f ops/sec\nNext fit utilization: %f\n\tmalloc: %d\n\t free: %d\n\trealloc: %d\n", opRate, util, num_malloc, num_free, num_realloc);
             break;
         case BEST_FIT:
-            printf("Best fit throughput: %.2f ops/sec\nBest fit utilization: %.2f\n", opRate, util);
+            printf("Best fit throughput: %f ops/sec\nBest fit utilization: %f\n\tmalloc: %d\n\t free: %d\n\trealloc: %d\n", opRate, util, num_malloc, num_free, num_realloc);
             break;
         default:
             break;
