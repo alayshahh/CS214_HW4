@@ -126,13 +126,13 @@ void performance(int allocAlg) {
     double util = utilization();
     switch (allocAlg) {
         case FIRST_FIT:
-            printf("First fit throughput: %f ops/sec\nFirst fit utilization: %f\n \tmalloc: %d\n\t free: %d\n\trealloc: %d\n", opRate, util, num_malloc, num_free, num_realloc);
+            printf("First fit throughput: %f ops/sec\nFirst fit utilization: %f\n", opRate, util);
             break;
         case NEXT_FIT:
-            printf("Next fit throughput: %f ops/sec\nNext fit utilization: %f\n\tmalloc: %d\n\t free: %d\n\trealloc: %d\n", opRate, util, num_malloc, num_free, num_realloc);
+            printf("Next fit throughput: %f ops/sec\nNext fit utilization: %f\n", opRate, util);
             break;
         case BEST_FIT:
-            printf("Best fit throughput: %f ops/sec\nBest fit utilization: %f\n\tmalloc: %d\n\t free: %d\n\trealloc: %d\n", opRate, util, num_malloc, num_free, num_realloc);
+            printf("Best fit throughput: %f ops/sec\nBest fit utilization: %f\n", opRate, util);
             break;
         default:
             break;
@@ -143,7 +143,7 @@ void performance(int allocAlg) {
 
 int main(int argc, char** argv) {
     srand(time(NULL));
-    // performance(0);
+    performance(0);
     performance(1);
-    // performance(2);
+    performance(2);
 }

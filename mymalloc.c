@@ -4,7 +4,7 @@
 #include "constants.h"
 
 #define DEBUG 0
-#define INIT_DEBUG 1
+#define INIT_DEBUG 0
 
 void* heap;
 void* endHeap;
@@ -413,8 +413,8 @@ double utilization() {
             lastUsed = ptr;        //set last use to the end of the block
         }
     }
-    printf("last used : %p, heap %p, difference: %lu", lastUsed, heap, ((lastUsed - (unsigned long*)heap)));
-    printf("asked size: %f\n ", askedSize);
+    // printf("last used : %p, heap %p, difference: %lu", lastUsed, heap, ((lastUsed - (unsigned long*)heap)));
+    // printf("asked size: %f\n ", askedSize);
     return askedSize / (8 * (lastUsed - (unsigned long*)heap));
 }
 
@@ -444,10 +444,10 @@ void* myrealloc(void* ptr, size_t size) {
     }
 
     // check if next block is free
-    unsigned long* nextBlock = startOfBlock + ((*startOfBlock & -2) / 8);
+    unsigned long* neighborBlock = startOfBlock + ((*startOfBlock & -2) / 8);
     int nextIsFree = 0;
-    if (nextBlock < (unsigned long*)endHeap) nextIsFree = !(*nextBlock & 0x1);
-    if (DEBUG && nextIsFree) printf("next is free @ %p, size of next block is %lu\n", nextBlock, *nextBlock);
+    if (neighborBlock < (unsigned long*)endHeap) nextIsFree = !(*neighborBlock & 0x1);
+    if (DEBUG && nextIsFree) printf("next is free @ %p, size of next block is %lu\n", neighborBlock, *neighborBlock);
 
     // resize within the block if possible
     if ((*startOfBlock & -2) > size) {  //ask for less data
@@ -473,9 +473,9 @@ void* myrealloc(void* ptr, size_t size) {
         // slack ptr, basically, the left over memory
         unsigned long* slackPtr = endSize + 1;
         if (nextIsFree) {
-            unsigned long* nextNext = (unsigned long*)*(nextBlock + 1);
-            unsigned long* prev = (unsigned long*)*(nextBlock + 2);
-            size_t newSize = sizeDifference + *nextBlock;
+            unsigned long* nextNext = (unsigned long*)*(neighborBlock + 1);
+            unsigned long* prev = (unsigned long*)*(neighborBlock + 2);
+            size_t newSize = sizeDifference + *neighborBlock;
             *(slackPtr) = newSize;
             *(slackPtr) &= ~(1 << 0);
             unsigned long* endFree = slackPtr + (*slackPtr) / 8 - 1;
@@ -488,7 +488,7 @@ void* myrealloc(void* ptr, size_t size) {
                 *(prev + 1) = (unsigned long)slackPtr;
             } else
                 firstBlock = slackPtr;
-            nextBlock = slackPtr;
+            nextBlock = firstBlock;
 
             return ptr;
         }
@@ -516,6 +516,7 @@ void* myrealloc(void* ptr, size_t size) {
             if (firstBlock != NULL)
                 *((unsigned long*)firstBlock + 2) = (unsigned long)slackPtr;
             firstBlock = slackPtr;
+            nextBlock = firstBlock;
             return ptr;
         }
 
@@ -537,19 +538,23 @@ void* myrealloc(void* ptr, size_t size) {
             unsigned long* nextFreePrev = nextFree + 2;
             *nextFreePrev = (unsigned long)slackPtr;
         }
+        nextBlock = firstBlock;
 
         return ptr;
     } else {  // if they ask for more data
         if (DEBUG) printf("REALLOC: asked for more data\n");
-        if (nextIsFree && ((*nextBlock + *startOfBlock) >= size)) {
-            size_t sizeDiff = *nextBlock + *startOfBlock - size;
+        if (nextIsFree && ((*neighborBlock + *startOfBlock) >= size)) {
+            size_t sizeDiff = *neighborBlock + (*startOfBlock & -2) - size;
             if (DEBUG) printf("REALLOC: can do in place, size diff %lu\n", sizeDiff);
-            unsigned long next = *(nextBlock + 1);
-            unsigned long prev = *(nextBlock + 2);
+            unsigned long next = *(neighborBlock + 1);
+            unsigned long prev = *(neighborBlock + 2);
             if (sizeDiff > 32) {  //if u can split
-                if (DEBUG) printf("REALLOC: splitting next block\n");
+
                 unsigned long* newFree = startOfBlock + size / 8;
+                if (DEBUG) printf("REALLOC: splitting adjacent block (%p) [next block = %p]\n", newFree, nextBlock);
+
                 *newFree = sizeDiff;
+                if (DEBUG) printf("size diff is equal to %lu\n", sizeDiff);
                 *newFree &= ~(1 << 0);  // set unalloc bit
                 *startOfBlock = size;
                 *startOfBlock |= 1 << 0;
@@ -568,9 +573,9 @@ void* myrealloc(void* ptr, size_t size) {
                     *((unsigned long*)prev + 1) = (unsigned long)newFree;
                 } else
                     firstBlock = newFree;
-                nextBlock = newFree;
+                nextBlock = firstBlock;
             } else {
-                *startOfBlock += *nextBlock;
+                *startOfBlock += *neighborBlock;
                 *startOfBlock |= 1 << 0;
                 askedSize += ask;
                 askedSize -= *(startOfBlock + 1);
@@ -585,7 +590,7 @@ void* myrealloc(void* ptr, size_t size) {
                     *((unsigned long*)prev + 1) = next;
                 } else
                     firstBlock = (void*)next;
-                nextBlock = (void*)next;
+                nextBlock = firstBlock;
             }
             return ptr;
         }
