@@ -3,8 +3,8 @@
 
 #include "constants.h"
 
-#define DEBUG 0
-#define INIT_DEBUG 0
+#define DEBUG 1
+#define INIT_DEBUG 1
 
 void* heap;
 void* endHeap;
@@ -421,94 +421,168 @@ void* myrealloc(void* ptr, size_t size) {
         myfree(ptr);
         return NULL;
     }
-
+    size_t ask = size;
     unsigned long* startOfBlock = (unsigned long*)ptr - 2;
-    size_t oldPayloadSize = (*startOfBlock & -2) - 3;
+    size_t oldPayloadSize = (*startOfBlock & -2) - 24;
 
-    //check if next block is free
-    unsigned long* nextBlock = startOfBlock + *startOfBlock;
+    size += 24;
+    size = findNearestMultipleof8(size);
 
-    //resize within the block if possible
+    if (size == (*startOfBlock & -2)) {
+        return ptr;
+    }
+
+    // check if next block is free
+    unsigned long* nextBlock = startOfBlock + ((*startOfBlock & -2) / 8);
+    int nextIsFree = !(*nextBlock & 0x1);
+
+    // resize within the block if possible
     if (oldPayloadSize > size) {
-        int sizeDifference = oldPayloadSize - size;
-        size = size + 24;
-        size = findNearestMultipleof8(size);
+        int sizeDifference =
+            oldPayloadSize - size;  // sizediff will be atleast 8
 
-        //set new size in the block
+        if (sizeDifference < 32 && !(nextIsFree)) {
+            return ptr;
+        }
+
+        // set new size in the block
         *startOfBlock = size;
         *startOfBlock |= 1 << 0;
-
-        //set endsize
+        askedSize -= *(startOfBlock + 1);
+        askedSize += ask;
+        *(startOfBlock + 1) = ask;
+        // set endsize
         unsigned long* endSize = startOfBlock + (size / 8) - 1;
         *endSize = size;
         *endSize |= 1 << 0;
 
-        //slack ptr, basically, the left over memory
+        // slack ptr, basically, the left over memory
         unsigned long* slackPtr = endSize + 1;
-        *slackPtr &= ~(1 << 0);
+        if (nextIsFree) {
+            unsigned long* nextNext = (unsigned long*)*(nextBlock + 1);
+            unsigned long* prev = (unsigned long*)*(nextBlock + 2);
+            size_t newSize = sizeDifference + *nextBlock;
+            *(slackPtr) = newSize;
+            unsigned long* endFree = slackPtr + (*slackPtr) / 8 - 1;
+            *endFree = newSize;
+            *(slackPtr + 1) = (unsigned long)nextNext;
+            *(slackPtr + 2) = (unsigned long)prev;
+            if (nextNext != 0) *(nextNext + 2) = (unsigned long)slackPtr;
+            if (prev != 0) {
+                *(prev + 1) = (unsigned long)slackPtr;
+            } else
+                firstBlock = slackPtr;
 
-        //if the next block is free, coalesce
-        if (!(*nextBlock & 0x1)) {
-            //set unallocated bit
-            coalesce(slackPtr, nextBlock);
-        } else {                        //next block is allocated, so see what you can do with the slackPtr
-            if (sizeDifference > 32) {  //you can make it it's own free block
-                //find prev free
-                unsigned long* find = heap;
-                unsigned long* prevFree = NULL;
-                while (find < slackPtr) {
-                    if (!(*find & 0x1)) {  // free block
-                        prevFree = find;
-                    }
-                    find = find + ((*find) / 8);  // add the size at find to move to the next block
-                }
-                if (prevFree == NULL) {  //what to do here?
-                }
-
-                //save prevFree's next
-                unsigned long oldNext = *(prevFree + 1);
-
-                //set up slackPtr to be a free block
-                *slackPtr = sizeDifference;
-                unsigned long* nextPtr = slackPtr + 1;
-                *nextPtr = oldNext;
-                unsigned long* prevPtr = slackPtr + 2;
-                *prevPtr = (unsigned long)prevFree;
-                unsigned long* endSize = slackPtr + (*slackPtr / 8) - 1;
-                *endSize = sizeDifference;
-                *endSize &= ~(1 << 0);
-
-                //set prevFree's next to be slackPtr
-                unsigned long* prevFreeNext = prevFree + 1;
-                *prevFree = (unsigned long)slackPtr;
-
-                //set nextFree's prev to be slackPtr
-                unsigned long* nextFree = (unsigned long*)oldNext;
-                unsigned long* nextFreePrev = nextFree + 2;
-                *nextFreePrev = (unsigned long)slackPtr;
-            }
+            return ptr;
         }
-        return startOfBlock;
-    } else {  //find a new block
+
+        *slackPtr = sizeDifference;
+        *slackPtr &= ~(1 << 0);
+        unsigned long* endSlack = slackPtr + (*slackPtr) / 8 - 1;
+        *endSlack = *slackPtr;
+
+        // find prev free
+        unsigned long* find = heap;
+        unsigned long* prevFree = NULL;
+        while (find < slackPtr) {
+            if (!(*find & 0x1)) {  // free block
+                prevFree = find;
+            }
+            find =
+                find + ((*find) /
+                        8);  // add the size at find to move to the next block
+        }
+
+        if (prevFree == NULL) {  // what to do here?
+            *(slackPtr + 1) = (unsigned long)firstBlock;
+            *(slackPtr + 2) = 0;
+            if (firstBlock != NULL)
+                *((unsigned long*)firstBlock + 2) = (unsigned long)slackPtr;
+            firstBlock = slackPtr;
+            return ptr;
+        }
+
+        // save prevFree's next
+        unsigned long oldNext = *(prevFree + 1);
+
+        unsigned long* nextPtr = slackPtr + 1;
+        *nextPtr = oldNext;
+        unsigned long* prevPtr = slackPtr + 2;
+        *prevPtr = (unsigned long)prevFree;
+
+        // set prevFree's next to be slackPtr
+        unsigned long* prevFreeNext = prevFree + 1;
+        *prevFreeNext = (unsigned long)slackPtr;
+
+        // set nextFree's prev to be slackPtr
+        unsigned long* nextFree = (unsigned long*)oldNext;
+        if (nextFree != 0) {
+            unsigned long* nextFreePrev = nextFree + 2;
+            *nextFreePrev = (unsigned long)slackPtr;
+        }
+
+        return ptr;
+    } else {  // if they ask for more data
+
+        if (nextIsFree && ((*nextBlock + *startOfBlock) >= size)) {
+            size_t sizeDiff = *nextBlock + *startOfBlock - size;
+            unsigned long next = *(nextBlock + 1);
+            unsigned long prev = *(nextBlock + 2);
+            if (sizeDiff > 32) {
+                unsigned long* newFree = startOfBlock + size / 8;
+                *newFree = sizeDiff;
+                *newFree &= ~(1 << 0);  // set unalloc bit
+                *startOfBlock = size;
+                *startOfBlock |= 1 << 0;
+                *(startOfBlock + 1) = ask;
+                *(newFree - 1) = *startOfBlock;  // end of malloc block
+                unsigned long* endOfFree = newFree + (*newFree / 8) - 1;
+                *endOfFree = (unsigned long)newFree;
+                *(newFree + 1) = next;
+                *(newFree + 2) = prev;
+                if (next != 0) {
+                    *((unsigned long*)next + 2) = (unsigned long)newFree;
+                }
+                if (prev != 0) {
+                    *((unsigned long*)prev + 1) = (unsigned long)newFree;
+                } else
+                    firstBlock = newFree;
+            } else {
+                *startOfBlock += *nextBlock;
+                *startOfBlock |= 1 << 0;
+                *(startOfBlock + 1) = ask;
+                unsigned long* endSize =
+                    startOfBlock + ((*startOfBlock & -2) / 8) - 1;
+                *endSize = *startOfBlock;
+                if (next != 0) {
+                    *((unsigned long*)next + 2) = prev;
+                }
+                if (prev != 0) {
+                    *((unsigned long*)prev + 1) = next;
+                } else
+                    firstBlock = (void*)next;
+            }
+            return ptr;
+        }
+
+        // find a new block
         unsigned long* newPtr = mymalloc(size);
         if (newPtr != NULL) {
-            //copy over data
-            unsigned long* newPayload = newPtr + 2;
-            unsigned long* oldPayload = (unsigned long*)ptr + 2;
-            unsigned long* endOfPayload = ptr + ((*ptr & -2) / 8) - 1;
+            // copy over data
+            unsigned long* newPayload = newPtr;
+            unsigned long* oldPayload = (unsigned long*)ptr;
+            unsigned long* ogPtr = (unsigned long*)ptr - 2;
+            unsigned long* endOfPayload = ogPtr + ((*ogPtr & -2) / 8) - 1;
 
             while (oldPayload < endOfPayload) {
                 *newPayload = *oldPayload;
                 oldPayload += 1;
                 newPayload += 1;
             }
-        } else {
-            return NULL;
+            // free old ptr
+            myfree(ptr);
+            return newPtr;
         }
-
-        //free old ptr
-        myfree(ptr);
-        return newPtr;
     }
     return NULL;
 }
