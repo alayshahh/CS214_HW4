@@ -3,7 +3,7 @@
 
 #include "constants.h"
 
-#define DEBUG 1
+#define DEBUG 0
 #define INIT_DEBUG 1
 
 void* heap;
@@ -268,7 +268,7 @@ void* mymalloc(size_t size) {
     }
     if (DEBUG) {
         printf("%f amount used (space left = %f), %lu amount needed\n FREE LIST: \n", amountUsed, (1024 * 1024) - amountUsed, size);
-        // printFreeList();
+        printFreeList();
     }
     return ptr;
 }
@@ -376,6 +376,7 @@ void myfree(void* ptr) {
             //now, make head prevFree
             head = prevFree;
         }
+        if (DEBUG) printFreeList();
     }
 
     //check if endOfHeadPtr is a free block (contiguous)
@@ -418,30 +419,41 @@ void* myrealloc(void* ptr, size_t size) {
         return mymalloc(size);
     }
     if (size == 0) {
+        if (DEBUG) {
+            printf("freeing from realloc\n");
+            printFreeList();
+        }
+
         myfree(ptr);
         return NULL;
     }
     size_t ask = size;
     unsigned long* startOfBlock = (unsigned long*)ptr - 2;
-    size_t oldPayloadSize = (*startOfBlock & -2) - 24;
 
     size += 24;
     size = findNearestMultipleof8(size);
+    if (DEBUG) printf("realloc size: %lu, current block size = %lu\n", size, *startOfBlock);
 
     if (size == (*startOfBlock & -2)) {
+        askedSize -= *(startOfBlock + 1);
+        askedSize += ask;
+        *(startOfBlock + 1) = ask;
         return ptr;
     }
 
     // check if next block is free
     unsigned long* nextBlock = startOfBlock + ((*startOfBlock & -2) / 8);
-    int nextIsFree = !(*nextBlock & 0x1);
+    int nextIsFree = 0;
+    if (nextBlock < endHeap) nextIsFree = !(*nextBlock & 0x1);
+    if (DEBUG && nextIsFree) printf("next is free @ %p, size of next block is %lu\n", nextBlock, *nextBlock);
 
     // resize within the block if possible
-    if (oldPayloadSize > size) {
-        int sizeDifference =
-            oldPayloadSize - size;  // sizediff will be atleast 8
+    if ((*startOfBlock & -2) > size) {  //ask for less data
+        size_t sizeDifference =
+            (*startOfBlock & -2) - size;  // sizediff will be atleast 8
 
         if (sizeDifference < 32 && !(nextIsFree)) {
+            if (DEBUG) printf("size Difference less than 32! & next not free, doing nothing...\n");
             return ptr;
         }
 
@@ -587,30 +599,27 @@ void* myrealloc(void* ptr, size_t size) {
     return NULL;
 }
 
-// int main() {
-//     myinit(2);
-//     unsigned long* ptr = (unsigned long*)mymalloc(1048);
-//     printf("ptr malloc bytes : %p, asked: %lu, given: %lu\n", ptr, *(ptr - 1), *(ptr - 2));
-//     // printf("first block: (%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
-//     unsigned long* ptr2 = (unsigned long*)mymalloc(5);
-//     printf("ptr2 malloc: %p, asked: %lu, given: %lu\n", ptr2, *(ptr2 - 1), *(ptr2 - 2));
-//     // printf("first block: (%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
-//     myfree(ptr2);
-//     // printf("frist block(%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
-//     unsigned long* ptr3 = (unsigned long*)mymalloc(5);
-//     printf("ptr3 malloc: %p, asked: %lu, given: %lu\n", ptr3, *(ptr3 - 1), *(ptr3 - 2));
-//     myfree(ptr);
-//     // printf("first block(%p) - > %lu firstBlock next: %lu \n", firstBlock, *((unsigned long*)firstBlock), *(((unsigned long*)firstBlock) + 1));
-//     unsigned long* ptr4 = (unsigned long*)mymalloc(1040);
-//     if (ptr4 == ptr) {
-//         printf("fuck yes baby\n");
-//     } else {
-//         printf("ptr4: %p, ptr: %p", ptr4, ptr);
-//     }
-//     if (ptr == NULL || ptr2 == NULL) {
-//         printf("fuck\n");
-//     } else {
-//         printf("making progress\n");
-//     }
-//     mycleanup(heap);
-// }
+int main() {
+    myinit(1);
+    unsigned long* ptr = (unsigned long*)mymalloc(1048);
+    printf("ptr malloc bytes : %p, asked: %lu, given: %lu\n", ptr, *(ptr - 1), *(ptr - 2));
+    myrealloc(ptr, 100);
+
+    printFreeList();
+
+    // printf("first block: (%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
+    unsigned long* ptr2 = (unsigned long*)mymalloc(5);
+    printf("ptr2 malloc: %p, asked: %lu, given: %lu\n", ptr2, *(ptr2 - 1), *(ptr2 - 2));
+    // printf("first block: (%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
+    // printf("frist block(%p) - > %lu firstBlock next: %p \n", firstBlock, *((unsigned long*)firstBlock), (unsigned long*)*(((unsigned long*)firstBlock) + 1));
+    unsigned long* ptr3 = (unsigned long*)mymalloc(5);
+    printf("ptr3 malloc: %p, asked: %lu, given: %lu\n", ptr3, *(ptr3 - 1), *(ptr3 - 2));
+    myrealloc(ptr2, 8);
+    // printf("first block(%p) - > %lu firstBlock next: %lu \n", firstBlock, *((unsigned long*)firstBlock), *(((unsigned long*)firstBlock) + 1));
+    unsigned long* ptr4 = (unsigned long*)mymalloc(1041);
+
+
+    myfree(ptr);
+    myrealloc(ptr4, 10);
+    printFreeList();
+}

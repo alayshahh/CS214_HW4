@@ -70,7 +70,7 @@ Node* createNode(void* node) {
     new->next = NULL;
     return new;
 }
-int OPERATIONS = 10000000;
+int OPERATIONS = 100;
 
 void performance(int allocAlg) {
     myinit(allocAlg);
