@@ -70,7 +70,7 @@ Node* createNode(void* node) {
     new->next = NULL;
     return new;
 }
-int OPERATIONS = 100;
+int OPERATIONS = 10000000;
 
 void performance(int allocAlg) {
     myinit(allocAlg);
@@ -143,7 +143,7 @@ void performance(int allocAlg) {
 
 int main(int argc, char** argv) {
     srand(time(NULL));
-    performance(0);
+    // performance(0);
     performance(1);
-    performance(2);
+    // performance(2);
 }
